@@ -1,95 +1,73 @@
-require('dotenv').config();
+require('dotenv').config(); // Load environment variables
+
 const express = require('express');
 const mongoose = require('mongoose');
+const bodyParser = require('body-parser');
+const session = require('express-session');
 const path = require('path');
-const Student = require('./models/Student');
-const Trainer = require('./models/Trainer');
 
 const app = express();
 
-app.use(express.json());
+// Middleware
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(session({
+    secret: process.env.SESSION_SECRET, // Use secret from .env file
+    resave: false,
+    saveUninitialized: true,
+}));
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI, {
+mongoose.connect(process.env.MONGODB_URI, { // Use URI from .env file
     useNewUrlParser: true,
-    useUnifiedTopology: true,
+    useUnifiedTopology: true
 })
-.then(() => console.log("MongoDB connected"))
-.catch(console.error);
+.then(() => console.log('Connected to MongoDB'))
+.catch((err) => console.log('Failed to connect to MongoDB:', err));
 
-// Student Routes
-app.post('/api/students', async (req, res) => {
-    try {
-        const student = new Student(req.body);
-        await student.save();
-        res.status(201).send(student);
-    } catch (error) {
-        res.status(400).send({ error: error.message });
-    }
+// Schema and Model
+const userSchema = new mongoose.Schema({
+    email: String,
+    password: String
 });
 
-app.get('/api/students', async (req, res) => {
-    const search = req.query.search || '';
-    try {
-        const students = await Student.find({ name: new RegExp(search, 'i') });
-        res.send(students);
-    } catch (error) {
-        res.status(500).send({ error: error.message });
-    }
+const User = mongoose.model('user', userSchema); // Collection name is 'user'
+
+// Serve login page
+app.get('/login', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
-app.put('/api/students/:id', async (req, res) => {
-    const { id } = req.params;
+// Handle login submission
+app.post('/login', async (req, res) => {
+    const { email, password } = req.body;
     try {
-        const student = await Student.findByIdAndUpdate(id, req.body, { new: true, runValidators: true });
-        if (!student) {
-            return res.status(404).send({ error: 'Student not found' });
+        // Find user in the database
+        const user = await User.findOne({ email, password });
+        if (user) {
+            // Set session and redirect to page1.html on success
+            req.session.userId = user._id;
+            res.redirect('/page1.html'); // Redirect to page1.html after successful login
+        } else {
+            res.send('Invalid credentials. Please try again.');
         }
-        res.send(student);
     } catch (error) {
-        res.status(400).send({ error: error.message });
+        console.error('Login error:', error);
+        res.status(500).send('An error occurred. Please try again.');
     }
 });
 
-// Trainer Routes
-app.post('/api/trainers', async (req, res) => {
-    try {
-        const trainer = new Trainer(req.body);
-        await trainer.save();
-        res.status(201).send(trainer);
-    } catch (error) {
-        res.status(400).send({ error: error.message });
+// Serve page1.html only if user is logged in
+app.get('/page1.html', (req, res) => {
+    if (req.session.userId) {
+        res.sendFile(path.join(__dirname, 'public', 'page1.html'));
+    } else {
+        res.redirect('/login'); // Redirect to login if not authenticated
     }
 });
 
-app.get('/api/trainers', async (req, res) => {
-    const search = req.query.search || '';
-    try {
-        const trainers = await Trainer.find({ name: new RegExp(search, 'i') });
-        res.send(trainers);
-    } catch (error) {
-        res.status(500).send({ error: error.message });
-    }
+// Start server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
 });
-
-app.put('/api/trainers/:id', async (req, res) => {
-    const { id } = req.params;
-    try {
-        const trainer = await Trainer.findByIdAndUpdate(id, req.body, { new: true, runValidators: true });
-        if (!trainer) {
-            return res.status(404).send({ error: 'Trainer not found' });
-        }
-        res.send(trainer);
-    } catch (error) {
-        res.status(400).send({ error: error.message });
-    }
-});
-
-// Root Route - Serve Main Page
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'page1.html')); // Replace with the desired main page
-});
-
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
