@@ -25,14 +25,21 @@ mongoose.connect(process.env.MONGODB_URI, { // Use URI from .env file
 .then(() => console.log('Connected to MongoDB'))
 .catch((err) => console.log('Failed to connect to MongoDB:', err));
 
-// Serve login page at the root URL
-app.get('/', (req, res) => {
-    res.redirect('/login'); // Redirect root URL to /login
+// Schema and Model
+const userSchema = new mongoose.Schema({
+    email: String,
+    password: String
 });
+
+const User = mongoose.model('user', userSchema); // Collection name is 'user'
 
 // Serve login page
 app.get('/login', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+// Serve login page at the root URL
+app.get('/', (req, res) => {
+    res.redirect('/login'); // Redirect root URL to /login
 });
 
 // Handle login submission
